@@ -2,28 +2,44 @@ import os
 import math
 import time
 from datetime import datetime, timedelta, timezone
-from openai import OpenAI
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# ------------------------------
+# LLM CONFIG
+# ------------------------------
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not OPENAI_API_KEY:
+    print("Missing OPENAI_API_KEY in .env")
+if not GEMINI_API_KEY:
+    print("Missing GEMINI_API_KEY in .env")
 
 # ------------------------------
-# IMPORT INGESTION MODULES
+# OPENAI CLIENT
+# ------------------------------
+from openai import OpenAI
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+# ------------------------------
+# GEMINI CLIENT (imported from llm/)
+# ------------------------------
+from llm.gemini_client import gemini_pro  # <-- correct import
+
+
+# ------------------------------
+# INGESTION SOURCES
 # ------------------------------
 
 from ingestion.news_api import fetch_news
 from ingestion.reddit_json import fetch_reddit_json
 from ingestion.amazon import fetch_amazon_best_sellers
-# from ingestion.tiktok import fetch_tiktok_trends
 from ingestion.news_rss import fetch_google_news_rss, fetch_rss_feeds
 from ingestion.youtube import fetch_youtube_trending, fetch_youtube_reviews
-
 
 
 # ------------------------------
@@ -31,36 +47,27 @@ from ingestion.youtube import fetch_youtube_trending, fetch_youtube_reviews
 # ------------------------------
 
 CATEGORIES = [
-    "technology",
-    "gadgets",
-    "consumer electronics",
-    "AI",
-    "smart home",
-    "robotics",
+    "technology", "gadgets", "consumer electronics",
+    "AI", "smart home", "robotics"
 ]
 
 SUBREDDITS = [
-    "technology",
-    "gadgets",
-    "technews",
-    "hardware",
-    "Apple",
-    "Android",
-    "HomeAutomation",
+    "technology", "gadgets", "technews",
+    "hardware", "Apple", "Android", "HomeAutomation"
 ]
 
-BATCH_SIZE = 100  # items per OpenAI batch
+BATCH_SIZE = 100
 
 
 # ------------------------------
-# OPENAI BATCH PROCESSORS
+# OPENAI MINI BATCH PROCESSOR
 # ------------------------------
 
 def call_openai_mini(prompt):
-    """Send to GPT-4.1-mini with retry logic."""
+    """Use GPT-4.1-mini for cheap batched classification."""
     for attempt in range(3):
         try:
-            resp = client.responses.create(
+            resp = openai_client.responses.create(
                 model="gpt-4.1-mini",
                 input=prompt
             )
@@ -68,19 +75,47 @@ def call_openai_mini(prompt):
         except Exception as e:
             print(f"⚠️ GPT-4.1-mini failed attempt {attempt+1}: {e}")
             time.sleep(2)
-    return "ERROR: GPT-4.1-mini failed after retries."
 
+    return "ERROR: GPT-4.1-mini failed."
+
+
+# ------------------------------
+# GPT-4 REFINEMENT (fallback)
+# ------------------------------
 
 def call_openai_refinement(prompt):
-    """Second pass using GPT-4.1 for high-quality analysis."""
+    """Use GPT-4.1 for refinement when context is small."""
     try:
-        resp = client.responses.create(
+        resp = openai_client.responses.create(
             model="gpt-4.1",
             input=prompt
         )
         return resp.output_text
     except Exception as e:
-        return f"ERROR during refinement: {e}"
+        return f"GPT-4.1 refinement error: {e}"
+
+
+# ------------------------------
+# HYBRID MODEL SELECTION LOGIC
+# ------------------------------
+
+def final_llm_analysis(prompt):
+    """
+    AUTO MODEL SELECTION:
+    - Under 20k characters → GPT-4.1 (fast + cheap)
+    - Over 20k characters  → Gemini 1.5 Pro Latest (deep analysis)
+    """
+    length = len(prompt)
+
+    if length < 20000:
+        print(" Auto-select: Using GPT-4.1 (prompt is small)…")
+        return call_openai_refinement(prompt)
+
+    # Change the model argument here:
+    print("Auto-select: Using gemini-2.5-pro (large prompt)…")
+    # Change: model="gemini-1.5-pro-latest"
+    return gemini_pro(prompt, model="gemini-2.5-pro")
+
 
 
 # ------------------------------
@@ -91,38 +126,35 @@ def analyze_batched(all_entries):
     titles = [e["title"] for e in all_entries if e["title"]]
 
     total = len(titles)
-    print(f"\n🧩 Total items to analyze: {total}")
+    print(f"\n Total items to analyze: {total}")
 
     num_batches = math.ceil(total / BATCH_SIZE)
-    print(f"📦 Processing in {num_batches} batches of {BATCH_SIZE} each\n")
+    print(f"Processing {num_batches} batches of {BATCH_SIZE} items\n")
 
     batch_summaries = []
 
     for i in range(num_batches):
-        start = i * BATCH_SIZE
-        end = start + BATCH_SIZE
-        batch_titles = titles[start:end]
-
+        batch_titles = titles[i * BATCH_SIZE : (i+1) * BATCH_SIZE]
         batch_text = "\n".join([f"- {t}" for t in batch_titles])
 
         mini_prompt = f"""
 You are an expert trend classifier.
 
-Analyze the following headlines:
+Analyze these headlines:
 
 {batch_text}
 
 Extract:
 - Key emerging trends
-- Categories represented
+- Categories
 - Product mentions
 - Sentiment direction
-- 3–5 short insights
+- 3–5 actionable insights
 
 Return a concise summary.
 """
 
-        print(f"⚡ Processing batch {i+1}/{num_batches}...")
+        print(f"⚡ Batch {i+1}/{num_batches}…")
         summary = call_openai_mini(mini_prompt)
         batch_summaries.append(summary)
 
@@ -131,28 +163,27 @@ Return a concise summary.
     refinement_prompt = f"""
 You are a senior market analyst.
 
-Here are summaries from {num_batches} batches of news, Reddit, and Amazon Best Sellers:
+Here are summaries from {num_batches} batches (news, Reddit, Amazon, RSS, YouTube):
 
 {combined}
 
 Create a FINAL TREND REPORT:
 
 1. Identify 10–12 major cross-platform trends.
-2. For each trend include:
-   - Trend title
-   - Why it's rising
+2. For each trend:
+   - Trend Title
+   - Why it is rising
    - Market impact
-   - Evidence patterns
+   - Supporting evidence
    - Trend Score (0–100)
-   - Whether rising, stable, or cooling
-3. End with a 5-line executive summary.
+   - Label (Rising / Stable / Cooling)
+3. End with a powerful executive summary.
 
-Return a clean, readable report.
+Return clean, structured output.
 """
 
-    print("\n🧠 Running refinement with GPT-4.1…")
-    final_report = call_openai_refinement(refinement_prompt)
-    return final_report
+    print("\n Running FINAL refinement…")
+    return final_llm_analysis(refinement_prompt)
 
 
 # ------------------------------
@@ -161,59 +192,39 @@ Return a clean, readable report.
 
 def run_trend_engine():
     print("\n🚀 Running Trend Engine…")
-
     all_entries = []
 
-    # ------------------------------
-    # Fetch News
-    # ------------------------------
+    # News
     for cat in CATEGORIES:
-        print(f"📰 Fetching News: {cat}")
-        news_items = fetch_news(cat)
-        for n in news_items:
+        print(f"Fetching News: {cat}")
+        for n in fetch_news(cat):
             all_entries.append({
                 "source": n.get("source", {}).get("name"),
                 "title": n.get("title"),
-                "text": (n.get("title") or "") + "\n\n" + (n.get("description") or ""),
+                "text": f"{n.get('title')}\n\n{n.get('description')}",
                 "url": n.get("url"),
                 "published_at": n.get("publishedAt"),
             })
 
-    # ------------------------------
-    # Fetch Reddit
-    # ------------------------------
-    reddit_items = fetch_reddit_json(SUBREDDITS, limit=50)
-    all_entries.extend(reddit_items)
+    # Reddit
+    all_entries.extend(fetch_reddit_json(SUBREDDITS, limit=50))
 
-    # ------------------------------
-    # Fetch Amazon Best Sellers
-    # ------------------------------
-    amazon_items = fetch_amazon_best_sellers()
-    all_entries.extend(amazon_items)
+    # Amazon Best Sellers
+    all_entries.extend(fetch_amazon_best_sellers())
 
-    # tiktok_items = fetch_tiktok_trends()
-    # all_entries.extend(tiktok_items)
+    # Google News RSS
+    all_entries.extend(fetch_google_news_rss())
 
-        # Fetch Google News RSS
-    google_rss = fetch_google_news_rss()
-    all_entries.extend(google_rss)
+    # Tech RSS feeds
+    all_entries.extend(fetch_rss_feeds())
 
-    # Fetch other tech RSS sources
-    rss_items = fetch_rss_feeds()
-    all_entries.extend(rss_items)
+    # YouTube trending
+    all_entries.extend(fetch_youtube_trending())
 
-    yt_trending = fetch_youtube_trending()
-    all_entries.extend(yt_trending)
+    # YouTube reviews
+    all_entries.extend(fetch_youtube_reviews())
 
-    yt_reviews = fetch_youtube_reviews()
-    all_entries.extend(yt_reviews)
-
-
-    print(f"\n📦 Total items collected: {len(all_entries)}")
-
-    # ------------------------------
-    # Run Trend Analysis
-    # ------------------------------
+    print(f"\n Total collected items: {len(all_entries)}")
 
     final_report = analyze_batched(all_entries)
 
@@ -221,11 +232,10 @@ def run_trend_engine():
     print(final_report)
     print("\n===============================================================\n")
 
-    # Save output
     with open("trend_report_optimized.txt", "w", encoding="utf-8") as f:
         f.write(final_report)
 
-    print("📄 Saved to trend_report_optimized.txt")
+    print("Saved to trend_report_optimized.txt")
 
 
 if __name__ == "__main__":

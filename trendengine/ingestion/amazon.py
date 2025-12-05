@@ -17,7 +17,7 @@ def fetch_amazon_best_sellers():
         response = requests.get(AMAZON_BEST_SELLERS_URL, headers=HEADERS, timeout=10)
         soup = BeautifulSoup(response.text, "html.parser")
     except Exception as e:
-        print(f"❌ Error fetching Amazon: {e}")
+        print(f"Error fetching Amazon: {e}")
         return []
 
     items = []
@@ -49,5 +49,5 @@ def fetch_amazon_best_sellers():
             "published_at": None,
         })
 
-    print(f"📦 Amazon products scraped: {len(items)}")
+    print(f"Amazon products scraped: {len(items)}")
     return items

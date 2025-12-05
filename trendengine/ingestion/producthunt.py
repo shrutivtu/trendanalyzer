@@ -27,10 +27,10 @@ query {
 
 
 def fetch_product_hunt():
-    print("🚀 Fetching Product Hunt trending products…")
+    print("Fetching Product Hunt trending products…")
 
     if not PRODUCT_HUNT_API_KEY:
-        print("❌ PRODUCT_HUNT_API_KEY is missing in .env")
+        print("PRODUCT_HUNT_API_KEY is missing in .env")
         return []
 
     headers = {
@@ -50,7 +50,7 @@ def fetch_product_hunt():
             timeout=15
         )
     except Exception as e:
-        print(f"❌ Network error fetching Product Hunt: {e}")
+        print(f"Network error fetching Product Hunt: {e}")
         return []
 
     # --------------------------
@@ -66,12 +66,12 @@ def fetch_product_hunt():
     try:
         data = response.json()
     except Exception as e:
-        print(f"❌ Could not decode JSON: {e}")
+        print(f"Could not decode JSON: {e}")
         return []
 
     # If Product Hunt sent an error message
     if "errors" in data:
-        print("❌ Product Hunt returned errors:")
+        print("Product Hunt returned errors:")
         print(data["errors"])
         return []
 
@@ -96,7 +96,7 @@ def fetch_product_hunt():
             "published_at": node.get("createdAt"),
         })
 
-    print(f"📦 Product Hunt items collected: {len(items)}")
+    print(f"Product Hunt items collected: {len(items)}")
     return items
 
 

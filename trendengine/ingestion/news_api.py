@@ -18,5 +18,5 @@ def fetch_news(category):
         data = r.json()
         return data.get("articles", [])
     except Exception as e:
-        print(f"❌ Error fetching news for {category}: {e}")
+        print(f"Error fetching news for {category}: {e}")
         return []

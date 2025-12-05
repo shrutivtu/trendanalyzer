@@ -6,7 +6,7 @@ def fetch_reddit_json(subreddits, limit=50):
     headers = {"User-Agent": "trend-agent/1.0"}
 
     for sub in subreddits:
-        print(f"🔍 Fetching Reddit: r/{sub}")
+        print(f"Fetching Reddit: r/{sub}")
         url = f"https://www.reddit.com/r/{sub}/hot.json?limit={limit}"
 
         try:
@@ -28,6 +28,6 @@ def fetch_reddit_json(subreddits, limit=50):
                 all_posts.append(post)
 
         except Exception as e:
-            print(f"❌ Error fetching r/{sub}: {e}")
+            print(f"Error fetching r/{sub}: {e}")
 
     return all_posts

@@ -45,7 +45,7 @@ def fetch_youtube_trending():
             "published_at": v.get("published")
         })
 
-    print(f"📦 Trending videos collected: {len(items)}")
+    print(f"Trending videos collected: {len(items)}")
     return items
 
 
@@ -55,10 +55,10 @@ def fetch_youtube_trending():
 
 def fetch_youtube_reviews(max_results=25):
     if not YOUTUBE_API_KEY:
-        print("⚠️ No YOUTUBE_API_KEY — skipping review search.")
+        print("No YOUTUBE_API_KEY — skipping review search.")
         return []
 
-    print("🔍 Fetching YouTube product reviews (API)…")
+    print("Fetching YouTube product reviews (API)…")
 
     items = []
 
@@ -88,9 +88,9 @@ def fetch_youtube_reviews(max_results=25):
                 })
 
         except Exception as e:
-            print(f"❌ Review fetch error for {kw}:", e)
+            print(f"Review fetch error for {kw}:", e)
 
-    print(f"📦 YouTube reviews collected: {len(items)}")
+    print(f"YouTube reviews collected: {len(items)}")
     return items
 
 

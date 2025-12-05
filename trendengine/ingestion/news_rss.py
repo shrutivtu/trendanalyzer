@@ -19,7 +19,7 @@ RSS_FEEDS = [
 ]
 
 def fetch_google_news_rss():
-    print("📰 Fetching Google News RSS…")
+    print("Fetching Google News RSS…")
     items = []
 
     for query in GOOGLE_QUERIES:
@@ -35,12 +35,12 @@ def fetch_google_news_rss():
                 "published_at": entry.published if hasattr(entry, "published") else None
             })
 
-    print(f"📦 Google News RSS collected: {len(items)}")
+    print(f"Google News RSS collected: {len(items)}")
     return items
 
 
 def fetch_rss_feeds():
-    print("📰 Fetching RSS feeds (TechCrunch, Verge, Wired…)")
+    print("Fetching RSS feeds (TechCrunch, Verge, Wired…)")
     items = []
 
     for feed_url in RSS_FEEDS:
@@ -55,7 +55,7 @@ def fetch_rss_feeds():
                 "published_at": entry.published if hasattr(entry, "published") else None
             })
 
-    print(f"📦 Other RSS sources collected: {len(items)}")
+    print(f"Other RSS sources collected: {len(items)}")
     return items
 
 

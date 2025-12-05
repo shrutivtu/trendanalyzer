@@ -14,7 +14,7 @@ def fetch_google_shopping_trends():
         r = requests.get(SEMRUSH_TRENDS_URL, timeout=10)
         data = r.json()
     except Exception as e:
-        print("❌ Error fetching Shopping Trends:", e)
+        print("Error fetching Shopping Trends:", e)
         return items
 
     for t in data.get("trends", []):
@@ -26,7 +26,7 @@ def fetch_google_shopping_trends():
             "published_at": datetime.utcnow().isoformat()
         })
 
-    print(f"📦 Shopping trend items collected: {len(items)}")
+    print(f"Shopping trend items collected: {len(items)}")
     return items
 
 
